@@ -75,10 +75,11 @@ class AnnotationTool(QMainWindow):
         self.drawing = False
         self.editing = False
         self.zooming = False
-        self.startPoint = QPointF()
-        self.endPoint = QPointF()
+        self.startPoint = None
+        self.endPoint = None
         self.currentLine = None
         self.lines = []
+        self.points = []  # To store drawn points
         self.actions = []  # To store actions for undo functionality
         self.pointSize = 6  # Increased size for better visibility
         self.closePointThreshold = 10  # Threshold to consider points as overlapping
@@ -127,6 +128,7 @@ class AnnotationTool(QMainWindow):
             self.scene.addItem(self.pixmapItem)
             self.fit_to_screen()
             self.lines.clear()
+            self.points.clear()
             self.actions.clear()  # Clear actions when a new image is loaded
             self.update_data_table()
 
@@ -216,7 +218,10 @@ class AnnotationTool(QMainWindow):
             if last_action["type"] == "line":
                 self.lines.pop()
             elif last_action["type"] == "point":
-                self.scene.removeItem(last_action["item"])
+                point_to_remove = last_action["point"]
+                self.points.remove(point_to_remove)
+                self.scene.removeItem(point_to_remove["item"])
+                self.lines = [(start, end) for start, end in self.lines if not (self.close_to_point(point_to_remove["point"], start) or self.close_to_point(point_to_remove["point"], end))]
             self.update_scene()
             self.update_data_table()
 
@@ -276,19 +281,32 @@ class AnnotationTool(QMainWindow):
 
     def handle_mouse_press(self, event):
         scenePos = self.graphicsView.mapToScene(event.pos())
+        nearby_point = self.get_nearby_point(scenePos)
         if not self.currentLine:
-            self.startPoint = self.get_nearby_point(scenePos)
-            self.currentLine = self.scene.addEllipse(self.startPoint.x() - self.pointSize / 2, self.startPoint.y() - self.pointSize / 2, self.pointSize, self.pointSize, QPen(Qt.blue), QColor(Qt.blue))
-            self.actions.append({"type": "point", "item": self.currentLine})  # Store the action for undo
+            if isinstance(nearby_point, QPointF):
+                self.startPoint = {"point": nearby_point, "item": self.scene.addEllipse(nearby_point.x() - self.pointSize / 2, nearby_point.y() - self.pointSize / 2, self.pointSize, self.pointSize, QPen(Qt.blue), QColor(Qt.blue))}
+                point_info = {"point": self.startPoint["point"], "item": self.startPoint["item"]}
+                self.points.append(point_info)
+                self.actions.append({"type": "point", "point": point_info})  # Store the action for undo
+            else:
+                self.startPoint = nearby_point
+            self.currentLine = True
         else:
-            self.endPoint = self.get_nearby_point(scenePos)
+            self.endPoint = nearby_point
             color = Qt.blue
-            if (self.startPoint - self.endPoint).manhattanLength() < self.closePointThreshold:
+            if (self.startPoint["point"] - self.endPoint["point"]).manhattanLength() < self.closePointThreshold:
                 self.endPoint = self.startPoint
             else:
-                self.break_line_if_needed(self.startPoint, self.endPoint)
-            self.scene.addEllipse(self.endPoint.x() - self.pointSize / 2, self.endPoint.y() - self.pointSize / 2, self.pointSize, self.pointSize, QPen(color), QColor(color))
-            self.lines.append((self.startPoint, self.endPoint))
+                self.break_line_if_needed(self.startPoint["point"], self.endPoint["point"])
+            if isinstance(self.endPoint, dict):
+                endPointItem = self.endPoint["item"]
+            else:
+                endPointItem = self.scene.addEllipse(self.endPoint.x() - self.pointSize / 2, self.endPoint.y() - self.pointSize / 2, self.pointSize, self.pointSize, QPen(color), QColor(color))
+                point_info = {"point": self.endPoint, "item": endPointItem}
+                self.points.append(point_info)
+                self.actions.append({"type": "point", "point": point_info})  # Store the action for undo
+                self.endPoint = {"point": self.endPoint, "item": endPointItem}
+            self.lines.append((self.startPoint["point"], self.endPoint["point"]))
             self.actions.append({"type": "line"})  # Store the action for undo
             self.currentLine = None
             self.update_scene()
@@ -296,19 +314,26 @@ class AnnotationTool(QMainWindow):
 
     def handle_mouse_move(self, event):
         if self.currentLine:
-            self.endPoint = self.graphicsView.mapToScene(event.pos())
+            self.endPoint = {"point": self.graphicsView.mapToScene(event.pos()), "item": None}
             self.update_scene()
 
     def handle_mouse_release(self, event):
         if self.currentLine:
-            self.endPoint = self.graphicsView.mapToScene(event.pos())
+            self.endPoint = {"point": self.graphicsView.mapToScene(event.pos()), "item": None}
             color = Qt.blue
-            if (self.startPoint - self.endPoint).manhattanLength() < self.closePointThreshold:
+            if (self.startPoint["point"] - self.endPoint["point"]).manhattanLength() < self.closePointThreshold:
                 self.endPoint = self.startPoint
             else:
-                self.break_line_if_needed(self.startPoint, self.endPoint)
-            self.scene.addEllipse(self.endPoint.x() - self.pointSize / 2, self.endPoint.y() - self.pointSize / 2, self.pointSize, self.pointSize, QPen(color), QColor(color))
-            self.lines.append((self.startPoint, self.endPoint))
+                self.break_line_if_needed(self.startPoint["point"], self.endPoint["point"])
+            if isinstance(self.endPoint, dict):
+                endPointItem = self.endPoint["item"]
+            else:
+                endPointItem = self.scene.addEllipse(self.endPoint["point"].x() - self.pointSize / 2, self.endPoint["point"].y() - self.pointSize / 2, self.pointSize, self.pointSize, QPen(color), QColor(color))
+                point_info = {"point": self.endPoint["point"], "item": endPointItem}
+                self.points.append(point_info)
+                self.actions.append({"type": "point", "point": point_info})  # Store the action for undo
+                self.endPoint = {"point": self.endPoint["point"], "item": endPointItem}
+            self.lines.append((self.startPoint["point"], self.endPoint["point"]))
             self.actions.append({"type": "line"})  # Store the action for undo
             self.currentLine = None
             self.update_scene()
@@ -390,11 +415,9 @@ class AnnotationTool(QMainWindow):
                 return line_end.y() <= point.y() <= line_start.y()
 
     def get_nearby_point(self, point):
-        for start, end in self.lines:
-            if (point - start).manhattanLength() < self.closePointThreshold:
-                return start
-            if (point - end).manhattanLength() < self.closePointThreshold:
-                return end
+        for pt in self.points:
+            if (point - pt["point"]).manhattanLength() < self.closePointThreshold:
+                return pt
         return point
 
     def close_to_point(self, p1, p2):
@@ -415,8 +438,8 @@ class AnnotationTool(QMainWindow):
             self.scene.addEllipse(start.x() - self.pointSize / 2, start.y() - self.pointSize / 2, self.pointSize, self.pointSize, QPen(color), QColor(color))
             self.scene.addEllipse(end.x() - self.pointSize / 2, end.y() - self.pointSize / 2, self.pointSize, self.pointSize, QPen(color), QColor(color))
         if self.currentLine:
-            self.scene.addEllipse(self.startPoint.x() - self.pointSize / 2, self.startPoint.y() - self.pointSize / 2, self.pointSize, self.pointSize, QPen(Qt.blue), QColor(Qt.blue))
-            self.scene.addLine(self.startPoint.x(), self.startPoint.y(), self.endPoint.x(), self.endPoint.y(), pen)
+            self.scene.addEllipse(self.startPoint["point"].x() - self.pointSize / 2, self.startPoint["point"].y() - self.pointSize / 2, self.pointSize, self.pointSize, QPen(Qt.blue), QColor(Qt.blue))
+            self.scene.addLine(self.startPoint["point"].x(), self.startPoint["point"].y(), self.endPoint["point"].x(), self.endPoint["point"].y(), pen)
         self.update_axis_lines()
 
     def update_axis_lines(self, event=None):

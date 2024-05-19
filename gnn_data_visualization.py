@@ -39,9 +39,10 @@ def visualize_csv(csv_file):
     plt.xlabel('X coordinates')
     plt.ylabel('Y coordinates')
     plt.title('Visualization of CSV Data')
-    plt.grid(True)
+    plt.grid(False)
+    plt.savefig("./annotation_tool/test.PNG")
     plt.show()
 
 # Example usage
-csv_file = './cs_data/TE_C_00001.csv'
+csv_file = './csv_data/TE_C_00001.csv'
 visualize_csv(csv_file)

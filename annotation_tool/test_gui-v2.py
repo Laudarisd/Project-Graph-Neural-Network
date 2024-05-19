@@ -1,8 +1,8 @@
 import sys
 import os
 import csv
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QGraphicsView, QGraphicsScene, QShortcut, QListWidget, QGraphicsPixmapItem, QGraphicsEllipseItem, QHeaderView, QGraphicsLineItem, QMessageBox, QSplitter
-from PyQt5.QtCore import Qt, QPointF, QRectF
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QGraphicsView, QGraphicsScene, QShortcut, QListWidget, QGraphicsPixmapItem, QGraphicsEllipseItem, QHeaderView, QGraphicsLineItem, QMessageBox, QSplitter, QMenu
+from PyQt5.QtCore import Qt, QPointF, QRectF, QEvent
 from PyQt5.QtGui import QPixmap, QPen, QColor, QKeySequence, QCursor, QPainter, QWheelEvent
 
 class AnnotationTool(QMainWindow):
@@ -87,6 +87,8 @@ class AnnotationTool(QMainWindow):
         
         self.dataTable.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)  # Allow resizing columns
         self.dataTable.cellClicked.connect(self.highlight_from_table)  # Connect cell click to highlight function
+        self.dataTable.setContextMenuPolicy(Qt.CustomContextMenu)  # Enable custom context menu
+        self.dataTable.customContextMenuRequested.connect(self.show_context_menu)  # Connect context menu request to handler
 
         self.saveButton = QPushButton("Save Data", self)
         self.saveButton.clicked.connect(self.save_data)
@@ -130,6 +132,8 @@ class AnnotationTool(QMainWindow):
         self.shortcut_undo.activated.connect(self.undo)
         self.shortcut_delete = QShortcut(QKeySequence("Delete"), self)
         self.shortcut_delete.activated.connect(self.delete_selected_item)
+        self.shortcut_save = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.shortcut_save.activated.connect(self.save_data)
 
     def upload_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
@@ -217,6 +221,8 @@ class AnnotationTool(QMainWindow):
     def next_image(self):
         if self.edited:
             reply = QMessageBox.question(self, 'Save Changes', 'Do you want to save changes?', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            yes_button = reply.button(QMessageBox.Yes)
+            yes_button.setStyleSheet("background-color: blue; color: white;")  # Make 'Yes' button blue
             if reply == QMessageBox.Yes:
                 self.save_data()
         if self.currentImageIndex < len(self.imageFiles) - 1:
@@ -227,6 +233,8 @@ class AnnotationTool(QMainWindow):
     def prev_image(self):
         if self.edited:
             reply = QMessageBox.question(self, 'Save Changes', 'Do you want to save changes?', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            yes_button = reply.button(QMessageBox.Yes)
+            yes_button.setStyleSheet("background-color: blue; color: white;")  # Make 'Yes' button blue
             if reply == QMessageBox.Yes:
                 self.save_data()
         if self.currentImageIndex > 0:
@@ -287,15 +295,9 @@ class AnnotationTool(QMainWindow):
                 break
 
     def delete_selected_item(self):
-        if self.selectedItem:
-            center = self.selectedItem.rect().center()
-            self.remove_lines_with_point(center)
-            self.scene.removeItem(self.selectedItem)
-            self.points = [p for p in self.points if p["item"] != self.selectedItem]
-            self.update_scene()
-            self.update_data_table()
-            self.selectedItem = None
-            self.edited = True
+        current_row = self.dataTable.currentRow()
+        if current_row >= 0:
+            self.delete_row(current_row)
 
     def remove_lines_with_point(self, point):
         self.lines = [line for line in self.lines if not (self.close_to_point(point, line[0]) or self.close_to_point(point, line[1]))]
@@ -604,6 +606,13 @@ class AnnotationTool(QMainWindow):
         self.update_scene()
         self.update_data_table()
         self.edited = True
+
+    def show_context_menu(self, pos):
+        contextMenu = QMenu(self)
+        deleteAction = contextMenu.addAction("Delete")
+        action = contextMenu.exec_(self.dataTable.mapToGlobal(pos))
+        if action == deleteAction:
+            self.delete_selected_item()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Delete:

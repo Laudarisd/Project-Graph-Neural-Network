@@ -220,10 +220,10 @@ class AnnotationTool(QMainWindow):
     
     def next_image(self):
         if self.edited:
-            reply = QMessageBox.question(self, 'Save Changes', 'Do you want to save changes?', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            yes_button = reply.button(QMessageBox.Yes)
-            yes_button.setStyleSheet("background-color: blue; color: white;")  # Make 'Yes' button blue
-            if reply == QMessageBox.Yes:
+            reply = QMessageBox(QMessageBox.Question, 'Save Changes', 'Do you want to save changes?', QMessageBox.Yes | QMessageBox.No)
+            reply.button(QMessageBox.Yes).setStyleSheet("background-color: blue; color: white;")
+            result = reply.exec_()
+            if result == QMessageBox.Yes:
                 self.save_data()
         if self.currentImageIndex < len(self.imageFiles) - 1:
             self.currentImageIndex += 1
@@ -232,10 +232,10 @@ class AnnotationTool(QMainWindow):
     
     def prev_image(self):
         if self.edited:
-            reply = QMessageBox.question(self, 'Save Changes', 'Do you want to save changes?', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            yes_button = reply.button(QMessageBox.Yes)
-            yes_button.setStyleSheet("background-color: blue; color: white;")  # Make 'Yes' button blue
-            if reply == QMessageBox.Yes:
+            reply = QMessageBox(QMessageBox.Question, 'Save Changes', 'Do you want to save changes?', QMessageBox.Yes | QMessageBox.No)
+            reply.button(QMessageBox.Yes).setStyleSheet("background-color: blue; color: white;")
+            result = reply.exec_()
+            if result == QMessageBox.Yes:
                 self.save_data()
         if self.currentImageIndex > 0:
             self.currentImageIndex -= 1
@@ -319,14 +319,22 @@ class AnnotationTool(QMainWindow):
         if source == self.graphicsView.viewport():
             if self.drawing:
                 if event.type() == event.MouseButtonPress and event.button() == Qt.LeftButton:
-                    self.handle_mouse_press(event)
+                    if event.type() == event.MouseButtonDblClick:
+                        self.zoom_in()  # Enable double-click zoom in drawing mode
+                    else:
+                        self.handle_mouse_press(event)
                 elif event.type() == event.MouseMove:
                     self.show_coordinates(event)
                     self.handle_mouse_move(event)
                     self.update_axis_lines(event)  # Always show axis lines
+                elif event.type() == event.MouseButtonDblClick and event.button() == Qt.LeftButton:
+                    self.zoom_in()  # Enable double-click zoom in drawing mode
             elif self.editing:
                 if event.type() == event.MouseButtonPress and event.button() == Qt.LeftButton:
-                    self.handle_edit_press(event)
+                    if event.type() == event.MouseButtonDblClick:
+                        self.zoom_in()  # Enable double-click zoom in editing mode
+                    else:
+                        self.handle_edit_press(event)
                 elif event.type() == event.MouseMove and event.buttons() == Qt.LeftButton:
                     self.handle_edit_move(event)
                 elif event.type() == event.MouseButtonRelease and event.button() == Qt.LeftButton:

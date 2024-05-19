@@ -47,4 +47,4 @@ Index,Start X,Start Y,End X,End Y,Image Width,Image Height
 
 <!-- import images here-->
 
-![image](test.png)
+![image](./test.PNG)

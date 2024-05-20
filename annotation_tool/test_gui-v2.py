@@ -220,11 +220,11 @@ class AnnotationTool(QMainWindow):
     
     def next_image(self):
         if self.edited:
-            reply = QMessageBox(QMessageBox.Question, 'Save Changes', 'Do you want to save changes?', QMessageBox.Yes | QMessageBox.No)
-            reply.button(QMessageBox.Yes).setStyleSheet("background-color: blue; color: white;")
-            result = reply.exec_()
+            result = self.ask_save_changes()
             if result == QMessageBox.Yes:
                 self.save_data()
+            elif result == QMessageBox.Cancel:
+                return
         if self.currentImageIndex < len(self.imageFiles) - 1:
             self.currentImageIndex += 1
             self.fileListWidget.setCurrentRow(self.currentImageIndex)
@@ -232,11 +232,11 @@ class AnnotationTool(QMainWindow):
     
     def prev_image(self):
         if self.edited:
-            reply = QMessageBox(QMessageBox.Question, 'Save Changes', 'Do you want to save changes?', QMessageBox.Yes | QMessageBox.No)
-            reply.button(QMessageBox.Yes).setStyleSheet("background-color: blue; color: white;")
-            result = reply.exec_()
+            result = self.ask_save_changes()
             if result == QMessageBox.Yes:
                 self.save_data()
+            elif result == QMessageBox.Cancel:
+                return
         if self.currentImageIndex > 0:
             self.currentImageIndex -= 1
             self.fileListWidget.setCurrentRow(self.currentImageIndex)
@@ -441,6 +441,8 @@ class AnnotationTool(QMainWindow):
         item = self.scene.itemAt(scenePos, self.graphicsView.transform())
         if item and isinstance(item, QGraphicsEllipseItem):
             self.setCursor(QCursor(Qt.SizeAllCursor))
+        elif item and isinstance(item, QGraphicsLineItem):
+            self.highlight_from_scene(item)
         else:
             self.setCursor(QCursor(Qt.OpenHandCursor))
 
@@ -528,6 +530,12 @@ class AnnotationTool(QMainWindow):
             scenePos = self.graphicsView.mapToScene(event.pos())
             self.axisLineX = self.scene.addLine(scenePos.x(), 0, scenePos.x(), self.scene.height(), QPen(QColor(200, 200, 200), 1, Qt.DashLine))
             self.axisLineY = self.scene.addLine(0, scenePos.y(), self.scene.width(), scenePos.y(), QPen(QColor(200, 200, 200), 1, Qt.DashLine))
+        elif self.drawing or self.editing:
+            # Get the cursor position relative to the scene
+            cursor_pos = self.graphicsView.mapFromGlobal(QCursor.pos())
+            scene_pos = self.graphicsView.mapToScene(cursor_pos)
+            self.axisLineX = self.scene.addLine(scene_pos.x(), 0, scene_pos.x(), self.scene.height(), QPen(QColor(200, 200, 200), 1, Qt.DashLine))
+            self.axisLineY = self.scene.addLine(0, scene_pos.y(), self.scene.width(), scene_pos.y(), QPen(QColor(200, 200, 200), 1, Qt.DashLine))
 
     def show_coordinates(self, event):
         scenePos = self.graphicsView.mapToScene(event.pos())
@@ -558,8 +566,8 @@ class AnnotationTool(QMainWindow):
         for item in self.scene.items():
             if isinstance(item, QGraphicsLineItem):
                 data = item.data(0)
-                if ((data["start"].x() == start_x and data["start"].y() == start_y and data["end"].x() == end_x and data["end"].y() == end_y) or
-                    (data["start"].x() == end_x and data["start"].y() == end_y and data["end"].x() == start_x and data["end"].y() == start_y)):
+                if data and ((data["start"].x() == start_x and data["start"].y() == start_y and data["end"].x() == end_x and data["end"].y() == end_y) or
+                             (data["start"].x() == end_x and data["start"].y() == end_y and data["end"].x() == start_x and data["end"].y() == start_y)):
                     item.setPen(QPen(QColor(255, 0, 0), 2))  # Highlight
                 else:
                     item.setPen(QPen(QColor(0, 255, 0), 2))  # Reset color
@@ -582,22 +590,23 @@ class AnnotationTool(QMainWindow):
                             p["item"].setBrush(QColor(Qt.blue))  # Reset color
         elif isinstance(item, QGraphicsLineItem):
             data = item.data(0)
-            start = data["start"]
-            end = data["end"]
-            for row in range(self.dataTable.rowCount()):
-                start_item = self.dataTable.item(row, 1)
-                start_x = float(start_item.text()) if start_item else None
-                start_y = float(self.dataTable.item(row, 2).text()) if start_item else None
-                end_x = float(self.dataTable.item(row, 3).text()) if start_item else None
-                end_y = float(self.dataTable.item(row, 4).text()) if start_item else None
-                if (start.x() == start_x and start.y() == start_y and end.x() == end_x and end.y() == end_y) or (start.x() == end_x and start.y() == end_y and end.x() == start_x and end.y() == start_y):
-                    self.dataTable.selectRow(row)
-                    item.setPen(QPen(QColor(255, 0, 0), 2))  # Highlight
-                    for p in self.points:
-                        if (p["point"].x() == start.x() and p["point"].y() == start.y()) or (p["point"].x() == end.x() and p["point"].y() == end.y()):
-                            p["item"].setBrush(QColor(255, 0, 0, 100))  # Highlight
-                        else:
-                            p["item"].setBrush(QColor(Qt.blue))  # Reset color
+            if data:
+                start = data["start"]
+                end = data["end"]
+                for row in range(self.dataTable.rowCount()):
+                    start_item = self.dataTable.item(row, 1)
+                    start_x = float(start_item.text()) if start_item else None
+                    start_y = float(self.dataTable.item(row, 2).text()) if start_item else None
+                    end_x = float(self.dataTable.item(row, 3).text()) if start_item else None
+                    end_y = float(self.dataTable.item(row, 4).text()) if start_item else None
+                    if (start.x() == start_x and start.y() == start_y and end.x() == end_x and end.y() == end_y) or (start.x() == end_x and start.y() == end_y and end.x() == start_x and end.y() == start_y):
+                        self.dataTable.selectRow(row)
+                        item.setPen(QPen(QColor(255, 0, 0), 2))  # Highlight
+                        for p in self.points:
+                            if (p["point"].x() == start.x() and p["point"].y() == start.y()) or (p["point"].x() == end.x() and p["point"].y() == end.y()):
+                                p["item"].setBrush(QColor(255, 0, 0, 100))  # Highlight
+                            else:
+                                p["item"].setBrush(QColor(Qt.blue))  # Reset color
 
     def delete_row(self, row):
         if row < 0 or row >= self.dataTable.rowCount():
@@ -627,6 +636,10 @@ class AnnotationTool(QMainWindow):
             current_row = self.dataTable.currentRow()
             if current_row >= 0:
                 self.delete_row(current_row)
+
+    def ask_save_changes(self):
+        reply = QMessageBox.question(self, 'Save Changes', 'Do you want to save changes?', QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+        return reply
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

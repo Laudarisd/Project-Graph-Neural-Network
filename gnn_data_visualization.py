@@ -44,5 +44,5 @@ def visualize_csv(csv_file):
     plt.show()
 
 # Example usage
-csv_file = './csv_data/TE_C_00001.csv'
+csv_file = './csv_data/TE_C_00004.csv'
 visualize_csv(csv_file)
